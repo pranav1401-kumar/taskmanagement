@@ -1,4 +1,5 @@
 const mysql = require('mysql2');
+const fs = require('fs');
 require('dotenv').config();
 
 const pool = mysql.createPool({
@@ -6,17 +7,23 @@ const pool = mysql.createPool({
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'task_management',
+  port: process.env.DB_PORT || 4000,  // TiDB Cloud uses 4000
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  ssl: {
+    minVersion: 'TLSv1.2',
+    // If TiDB Cloud provides a CA cert:
+    // ca: fs.readFileSync('./ca.pem')
+    rejectUnauthorized: true
+  }
 });
 
 // Create database and tables if they don't exist
 const initDatabase = async () => {
   try {
     const connection = await pool.promise().getConnection();
-    
-    // Create users table
+
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -27,7 +34,6 @@ const initDatabase = async () => {
       )
     `);
 
-    // Create tasks table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS tasks (
         id INT PRIMARY KEY AUTO_INCREMENT,
@@ -44,9 +50,13 @@ const initDatabase = async () => {
     `);
 
     connection.release();
-    console.log('Database tables initialized successfully');
+    console.log('[DB] ✅ Tables initialized successfully');
   } catch (error) {
-    console.error('Database initialization error:', error);
+    console.error('[DB] ❌ Initialization error:', {
+      code: error.code,
+      message: error.message,
+      sqlState: error.sqlState
+    });
   }
 };
 
